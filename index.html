@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GPS Heatmap</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        body { margin: 0; padding: 0; }
+        #map { height: 100vh; width: 100vw; }
+        button {padding: 12px 24px;}
+        .button-container {position: absolute; 
+            bottom: 30px; 
+            right: 30px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;    
+        }
+    </style>
+</head>
+<body>
+    <div class="button-container">
+        <button class = "mapbutton" onclick=cycleMap()> Map Style </button>
+        <button class ="heatbutton" onclick=cycleHeatMap()> Heatmap Style </button>
+    </div>
+    
+    <div id="map"></div>
+
+    <!-- Leaflet JavaScript -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+
+
+        let currentApi = 0
+        const apis = [
+            'https://api.maptiler.com/tiles/satellite-v2/{z}/{x}/{y}.jpg?key=LRgQC0OCtj8Im86MjfQI',
+            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png',
+            'https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png',
+            'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png'
+        ]
+
+        let heatMapStyle = 0
+        const heatMaps = [
+            './tiles_red/{z}/{x}/{y}.png',
+            './tiles_blue/{z}/{x}/{y}.png',
+            './tiles_blue-red/{z}/{x}/{y}.png',
+            './tiles_red-blue/{z}/{x}/{y}.png',
+            './tiles/{z}/{x}/{y}.png'
+        ]
+
+        let firstLoad = true
+
+        const map = L.map('map').setView([54, 12], 6);
+        setMapLayers()
+        map.setZoom(8);
+
+        function setMapLayers() {
+            baseLayer = L.tileLayer(apis[currentApi], {
+                maxZoom: 18,
+                minZoom: 5,
+                attribution: 'Map tiles by Carto, under CC BY 3.0. Data by OpenStreetMap, under ODbL.'
+            }).addTo(map)
+            heatmapLayer = L.tileLayer(heatMaps[heatMapStyle], {
+            minZoom: 8,
+            maxNativeZoom: 15,
+            opacity: 0.7, 
+            tms: false  
+        }).addTo(map);
+        }
+        
+        function cycleMap() {
+            currentApi = (currentApi + 1) % apis.length
+            map.removeLayer(baseLayer)
+            map.removeLayer(heatmapLayer)
+            setMapLayers()
+        }
+        function cycleHeatMap(){
+            heatMapStyle = (heatMapStyle + 1) % heatMaps.length
+            map.removeLayer(baseLayer)
+            map.removeLayer(heatmapLayer)
+            setMapLayers()
+        }
+    </script>
+</body>
+</html>

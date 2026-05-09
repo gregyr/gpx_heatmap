@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"io/fs"
 	"math"
 	"os"
@@ -32,4 +33,19 @@ func exists(path string) (bool, error) {
 		return false, nil
 	}
 	return false, err
+}
+
+func printProgress(max int, current int) {
+
+	barLength := 20
+
+	fmt.Print("\r[")
+	progress := float64(current) / float64(max)
+	for range int(progress * float64(barLength)) {
+		fmt.Print("=")
+	}
+	for range int(float64(1-progress) * float64(barLength)) {
+		fmt.Print(" ")
+	}
+	fmt.Printf("] %5.2f%%", progress*100)
 }

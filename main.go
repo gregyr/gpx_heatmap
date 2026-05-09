@@ -66,49 +66,7 @@ var colorSchemes map[string]ColorScheme = map[string]ColorScheme{
 var colorScheme = colorSchemes["red"]
 
 func main() {
-
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
-
-	inputDirectoryEnv, inputDirOk := os.LookupEnv("RUN_DIRECTORY")
-	rootDirEnv, rootDirOk := os.LookupEnv("GPX_DIRECTORY")
-
-	if !inputDirOk || !rootDirOk {
-		log.Fatal("Missing Environment variables: RUN_DIRECTORY or GPX_DIRECTORY")
-	} else {
-		inputDirectory = inputDirectoryEnv
-		rootDir = rootDirEnv
-	}
-
-	colorEnv, colorOk := os.LookupEnv("COLOR")
-
-	if _, ok := colorSchemes[colorEnv]; colorOk && ok {
-		colorScheme = colorSchemes[colorEnv]
-	} else {
-		var color string
-		for name := range colorSchemes {
-			fmt.Printf("Color \"%s\"\n", name)
-		}
-		fmt.Print("Choose Color:")
-		fmt.Scanln(&color)
-		setColorScheme(color)
-	}
-
-	runsEnv, runsOk := os.LookupEnv("ONLY_RUNS")
-	if runsOk && runsEnv == "true" {
-		onlyRuns = true
-	} else if runsOk && runsEnv == "false" {
-		onlyRuns = false
-	} else {
-		var runs string
-		fmt.Println("Only Map Running activities? (Leave empty for no, input anything for yes)")
-		fmt.Scanln(&runs)
-		if len(runs) > 0 {
-			onlyRuns = true
-		}
-	}
+	setupEnvironment()
 	generateTileImages()
 }
 
@@ -161,7 +119,7 @@ func generateTileImages() {
 // returns a list of all points aswell as a list of routes
 func extractAllPointsAndRoutes() ([]Point, []Route) {
 
-	entries := []string{}
+	entries := []string{} // MAKE THIS OPTIONALLY RECURSIVE OR IGNORE ENTRY
 	if !onlyRuns {
 		folders, err := os.ReadDir(rootDir)
 		if err != nil {
@@ -265,7 +223,8 @@ func getTilesWithData(points []Point, zoom int) map[Tile]bool {
 	return tileSet
 }
 
-func routeToPlotterXY(route []Point) plotter.XYs {
+// converts a list of points to plotter.XYs
+func pointListToPlotterXY(route []Point) plotter.XYs {
 	pts := make(plotter.XYs, len(route))
 	for i := range pts {
 		pts[i].X = route[i].longitude
@@ -274,6 +233,8 @@ func routeToPlotterXY(route []Point) plotter.XYs {
 	return pts
 }
 
+// plots a route respective on a tile at a given zoom level
+// p1 and p2 are the tiles XY and X+1Y+1 coordinates
 func plotRoutes(routes []Route, p1 Point, p2 Point, tile Tile, zoom int) {
 	p := plot.New()
 
@@ -282,7 +243,7 @@ func plotRoutes(routes []Route, p1 Point, p2 Point, tile Tile, zoom int) {
 			route.max.longitude < p1.longitude ||
 			route.min.latitude > p1.latitude ||
 			route.min.longitude > p2.longitude) {
-			line, err := plotter.NewLine(routeToPlotterXY(route.points))
+			line, err := plotter.NewLine(pointListToPlotterXY(route.points))
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -294,10 +255,12 @@ func plotRoutes(routes []Route, p1 Point, p2 Point, tile Tile, zoom int) {
 		}
 	}
 
+	// set plot options
 	p.HideAxes()
 	p.Title.Padding = 0
 
-	plotAccPadding := 0.2
+	// make plot slightly larger for less color deviance at the border
+	plotAccPadding := 0.2 // 0.2 to both limit stretching and maximize padding
 	tileWidthDegrees := 360.0 / math.Pow(2.0, float64(zoom))
 	epsilon := tileWidthDegrees * plotAccPadding / 256
 
@@ -309,14 +272,18 @@ func plotRoutes(routes []Route, p1 Point, p2 Point, tile Tile, zoom int) {
 	p.Y.Padding = -0.2 // plotAccPadding idk how to make it vg.length
 	p.BackgroundColor = color.Transparent
 
+	// create transparent canvas
 	c := vgimg.PngCanvas{Canvas: vgimg.NewWith(
 		vgimg.UseWH(256, 256),
 		vgimg.UseBackgroundColor(color.Transparent),
 	)}
 	p.Draw(draw.New(c))
+
+	// format output
 	outPath := fmt.Sprintf("%s/%v/%v/", outputDirectory, zoom, tile.x)
 	os.MkdirAll(outPath, os.ModePerm)
 
+	// color pixels based on their alpha value
 	imageBounds := c.Image().Bounds()
 	for x := range imageBounds.Dx() {
 		for y := range imageBounds.Dy() {
@@ -332,6 +299,7 @@ func plotRoutes(routes []Route, p1 Point, p2 Point, tile Tile, zoom int) {
 		}
 	}
 
+	// output file
 	f, err := os.Create(fmt.Sprintf("%s%v.png", outPath, tile.y))
 	if err != nil {
 		log.Fatal(err)
@@ -349,6 +317,7 @@ func plotRoutes(routes []Route, p1 Point, p2 Point, tile Tile, zoom int) {
 	}
 }
 
+// sets the colorscheme based on a given string, handles wrong strings
 func setColorScheme(color string) {
 	cs, ok := colorSchemes[color]
 	if ok {
@@ -357,17 +326,51 @@ func setColorScheme(color string) {
 	}
 }
 
-func printProgress(max int, current int) {
-
-	barLength := 20
-
-	fmt.Print("\r[")
-	progress := float64(current) / float64(max)
-	for range int(progress * float64(barLength)) {
-		fmt.Print("=")
+// loads environment variables from .env
+// local config for missing optional Vars
+func setupEnvironment() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
 	}
-	for range int(float64(1-progress) * float64(barLength)) {
-		fmt.Print(" ")
+
+	inputDirectoryEnv, inputDirOk := os.LookupEnv("RUN_DIRECTORY")
+	rootDirEnv, rootDirOk := os.LookupEnv("GPX_DIRECTORY")
+
+	if !inputDirOk || !rootDirOk {
+		log.Fatal("Missing Environment variables: RUN_DIRECTORY or GPX_DIRECTORY")
+	} else {
+		inputDirectory = inputDirectoryEnv
+		rootDir = rootDirEnv
 	}
-	fmt.Printf("] %5.2f%%", progress*100)
+
+	colorEnv, colorOk := os.LookupEnv("COLOR")
+
+	if _, ok := colorSchemes[colorEnv]; colorOk && ok {
+		colorScheme = colorSchemes[colorEnv]
+	} else {
+		log.Println("Missing optional env 'COLOR', choose Color")
+		var color string
+		for name := range colorSchemes {
+			fmt.Printf("Color \"%s\"\n", name)
+		}
+		fmt.Print("Choose Color:")
+		fmt.Scanln(&color)
+		setColorScheme(color)
+	}
+
+	runsEnv, runsOk := os.LookupEnv("ONLY_RUNS")
+	if runsOk && runsEnv == "true" {
+		onlyRuns = true
+	} else if runsOk && runsEnv == "false" {
+		onlyRuns = false
+	} else {
+		log.Println("Missing optional env 'ONLY_RUNS', choose:")
+		var runs string
+		fmt.Println("Only Map Running activities? (Leave empty for no, input anything for yes)")
+		fmt.Scanln(&runs)
+		if len(runs) > 0 {
+			onlyRuns = true
+		}
+	}
 }

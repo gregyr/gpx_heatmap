@@ -4,7 +4,8 @@ have only one root dir make it either recursive or not
 
 Environment Variables:
 
-RUN_DIRECTORY = Path to directory with running gpx data
-GPX_DIRECTORY = Path to all gpx data
+GPX_DIRECTORY = Path to gpx data needs to end on /
 COLOR = Map color scheme {red, blue, blue-red, red-blue}
-ONLY_RUNS = Whether to only use running gpx {true, false}
+RECURSIVE = Whether to recursively search the input directory {true, false}
+OUTPUT = Outputpath, gets the color appended if selected
+IGNORE_DIR = directory name to ignore when recursively searching

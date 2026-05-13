@@ -41,11 +41,11 @@ func printProgress(max int, current int) {
 
 	fmt.Print("\r[")
 	progress := float64(current) / float64(max)
-	for range int(progress * float64(barLength)) {
+	for range int(progress*float64(barLength) + 0.5) { // + 0.5 for correct rounding
 		fmt.Print("=")
 	}
-	for range int(float64(1-progress) * float64(barLength)) {
+	for range int(float64(1-progress)*float64(barLength) + 0.5) {
 		fmt.Print(" ")
 	}
-	fmt.Printf("] %5.2f%%", progress*100)
+	fmt.Printf("] %5.2f%% - %v/%v", progress*100, current, max)
 }

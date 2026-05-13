@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"slices"
 	"strconv"
+	"strings"
 
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
@@ -19,10 +20,10 @@ import (
 	"github.com/joho/godotenv"
 )
 
-var inputDirectory string = "C:/Users/Gregyr/Desktop/DESKTOP/CODE/py/actually useful/scraping/Coros Activities/gpx_data/run/"
-var rootDir string = "C:/Users/Gregyr/Desktop/DESKTOP/CODE/py/actually useful/scraping/Coros Activities/gpx_data/"
+var inputDirectory string = ""
 
-var onlyRuns = false
+var ignoreDir string = ""
+var recursiveSearch bool = false
 var outputDirectory string = "tiles/"
 
 var zoomLevels = []int{5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
@@ -120,19 +121,40 @@ func generateTileImages() {
 func extractAllPointsAndRoutes() ([]Point, []Route) {
 
 	entries := []string{} // MAKE THIS OPTIONALLY RECURSIVE OR IGNORE ENTRY
-	if !onlyRuns {
-		folders, err := os.ReadDir(rootDir)
+	if recursiveSearch {
+		dirs := []string{} // store dir paths
+
+		// dir Entries of input dir
+		dirEntries, err := os.ReadDir(inputDirectory)
 		if err != nil {
 			log.Fatal(err)
 		}
-		for _, f := range folders {
-			if f.Name() != "other" {
-				e, err := os.ReadDir(rootDir + f.Name())
-				if err != nil {
-					log.Fatal(err)
-				}
-				for _, en := range e {
-					entries = append(entries, f.Name()+"/"+en.Name())
+
+		// fill dirs with the dirs from input dir
+		for _, e := range dirEntries {
+			if e.IsDir() {
+				dirs = append(dirs, e.Name())
+			} else {
+				entries = append(entries, e.Name())
+			}
+		}
+
+		// pop element from dir list as long as there are elements
+		for len(dirs) > 0 {
+			dir := dirs[0]
+			dirs = dirs[1:]
+			if ignoreDir != "" && strings.Contains(dir, ignoreDir) { // check if valid dir name else ignore
+				continue
+			}
+			entrs, err := os.ReadDir(inputDirectory + dir) // get all entries
+			if err != nil {
+				log.Fatal(err)
+			}
+			for _, e := range entrs { // add entries recursively to dirs or entries depending on filetype
+				if e.IsDir() {
+					dirs = append(dirs, dir+"/"+e.Name()) // name relative to input directory
+				} else {
+					entries = append(entries, dir+"/"+e.Name())
 				}
 			}
 		}
@@ -143,7 +165,9 @@ func extractAllPointsAndRoutes() ([]Point, []Route) {
 			log.Fatal(err)
 		}
 		for _, en := range e {
-			entries = append(entries, en.Name())
+			if !en.IsDir() {
+				entries = append(entries, en.Name())
+			}
 		}
 	}
 	points := []Point{} // all points
@@ -166,19 +190,9 @@ func extractAllPointsAndRoutes() ([]Point, []Route) {
 func getRouteFromEntryString(entry string) (Route, error) {
 
 	// load file
-	var fileContent []byte
-	if onlyRuns {
-		var err error
-		fileContent, err = os.ReadFile(inputDirectory + entry)
-		if err != nil {
-			return Route{}, err
-		}
-	} else {
-		var err error
-		fileContent, err = os.ReadFile(rootDir + entry)
-		if err != nil {
-			return Route{}, err
-		}
+	fileContent, err := os.ReadFile(inputDirectory + entry)
+	if err != nil {
+		return Route{}, err
 	}
 	// get Node Structure
 	rootNode, err := parsing.ParseXML(string(fileContent))
@@ -238,6 +252,8 @@ func pointListToPlotterXY(route []Point) plotter.XYs {
 func plotRoutes(routes []Route, p1 Point, p2 Point, tile Tile, zoom int) {
 	p := plot.New()
 
+	var routeBrightness uint8 = 50
+
 	for _, route := range routes { // check wheter a route even intersects the tile, plotting can be skipped otherwise
 		if !(route.max.latitude < p2.latitude ||
 			route.max.longitude < p1.longitude ||
@@ -248,7 +264,7 @@ func plotRoutes(routes []Route, p1 Point, p2 Point, tile Tile, zoom int) {
 				log.Fatal(err)
 			}
 
-			line.LineStyle.Color = color.RGBA{R: 50, G: 50, B: 50, A: 50}
+			line.LineStyle.Color = color.RGBA{R: routeBrightness, G: routeBrightness, B: routeBrightness, A: routeBrightness}
 			line.LineStyle.Width = 1
 			line.StepStyle = plotter.NoStep
 			p.Add(line)
@@ -321,7 +337,7 @@ func plotRoutes(routes []Route, p1 Point, p2 Point, tile Tile, zoom int) {
 func setColorScheme(color string) {
 	cs, ok := colorSchemes[color]
 	if ok {
-		outputDirectory = fmt.Sprintf("tiles_%s", color)
+		outputDirectory = fmt.Sprintf("%s_%s", outputDirectory, color)
 		colorScheme = cs
 	}
 }
@@ -334,20 +350,23 @@ func setupEnvironment() {
 		log.Fatal("Error loading .env file")
 	}
 
-	inputDirectoryEnv, inputDirOk := os.LookupEnv("RUN_DIRECTORY")
-	rootDirEnv, rootDirOk := os.LookupEnv("GPX_DIRECTORY")
+	inputDirectoryEnv, inputDirOk := os.LookupEnv("GPX_DIRECTORY")
 
-	if !inputDirOk || !rootDirOk {
-		log.Fatal("Missing Environment variables: RUN_DIRECTORY or GPX_DIRECTORY")
+	if !inputDirOk {
+		log.Fatal("Missing Environment: GPX_DIRECTORY")
 	} else {
 		inputDirectory = inputDirectoryEnv
-		rootDir = rootDirEnv
+	}
+
+	outputEnv, outputOk := os.LookupEnv("OUTPUT")
+	if outputOk && len(outputEnv) > 0 {
+		outputDirectory = outputEnv
 	}
 
 	colorEnv, colorOk := os.LookupEnv("COLOR")
 
-	if _, ok := colorSchemes[colorEnv]; colorOk && ok {
-		colorScheme = colorSchemes[colorEnv]
+	if colorOk {
+		setColorScheme(colorEnv)
 	} else {
 		log.Println("Missing optional env 'COLOR', choose Color")
 		var color string
@@ -359,18 +378,23 @@ func setupEnvironment() {
 		setColorScheme(color)
 	}
 
-	runsEnv, runsOk := os.LookupEnv("ONLY_RUNS")
-	if runsOk && runsEnv == "true" {
-		onlyRuns = true
-	} else if runsOk && runsEnv == "false" {
-		onlyRuns = false
+	recursiveEnv, recursiveOk := os.LookupEnv("RECURSIVE")
+	if recursiveOk && recursiveEnv == "true" {
+		recursiveSearch = true
+	} else if recursiveOk && recursiveEnv == "false" {
+		recursiveSearch = false
 	} else {
-		log.Println("Missing optional env 'ONLY_RUNS', choose:")
+		log.Println("Missing optional env 'RECURSIVE', choose:")
 		var runs string
-		fmt.Println("Only Map Running activities? (Leave empty for no, input anything for yes)")
+		fmt.Println("Search input dir recursively? (empty input for no, input anything for yes)")
 		fmt.Scanln(&runs)
 		if len(runs) > 0 {
-			onlyRuns = true
+			recursiveSearch = true
 		}
+	}
+
+	ignoreDirEnv, ignoreDirOk := os.LookupEnv("IGNORE_DIR")
+	if ignoreDirOk {
+		ignoreDir = ignoreDirEnv
 	}
 }

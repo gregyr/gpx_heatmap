@@ -2,7 +2,7 @@ module gpx_heatmap
 
 go 1.25.6
 
-replace modular_crawler => ../xml_parser/src/
+replace modular_crawler => ../../xml_parser/src/
 
 require (
 	gonum.org/v1/plot v0.17.0

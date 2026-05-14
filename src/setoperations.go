@@ -4,6 +4,7 @@ func createTileSet() map[Tile]bool {
 	return map[Tile]bool{}
 }
 
+// useless haha
 func setUnion(s1 map[int]bool, s2 map[int]bool) {
 	s_union := map[int]bool{}
 	for k := range s1 {
@@ -17,7 +18,7 @@ func setUnion(s1 map[int]bool, s2 map[int]bool) {
 func setIntersection(s1 map[int]bool, s2 map[int]bool) {
 	s_intersection := map[int]bool{}
 	if len(s1) > len(s2) {
-		s1, s2 = s2, s1 // better to iterate over a shorter set
+		s1, s2 = s2, s1
 	}
 	for k := range s1 {
 		if s2[k] {

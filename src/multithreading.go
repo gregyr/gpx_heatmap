@@ -2,7 +2,7 @@ package main
 
 import "sync"
 
-// PlotJob represents a single tile plotting task to be processed by a worker
+// tile plotting job
 type PlotJob struct {
 	tile   Tile
 	zoom   int
@@ -11,16 +11,15 @@ type PlotJob struct {
 	routes []Route
 }
 
-// WorkerPool manages a pool of goroutines that process plotting jobs
+// manages a pool of goroutines
 type WorkerPool struct {
 	jobQueue   chan PlotJob
 	numWorkers int
 	wg         sync.WaitGroup
 }
 
-// NewWorkerPool creates a new worker pool with given number of workers
-// numWorkers: how many concurrent goroutines to spawn
-// bufferSize: size of the job queue channel (higher = more jobs queued before blocking)
+// creates a new worker pool with given number of workers
+// buffersize is the max amount of jobs
 func NewWorkerPool(numWorkers int, bufferSize int) *WorkerPool {
 	return &WorkerPool{
 		jobQueue:   make(chan PlotJob, bufferSize),
@@ -28,7 +27,7 @@ func NewWorkerPool(numWorkers int, bufferSize int) *WorkerPool {
 	}
 }
 
-// Start initializes the worker goroutines and starts listening for jobs
+// initializes the workers -> listening for jobs
 func (wp *WorkerPool) Start() {
 	for i := 0; i < wp.numWorkers; i++ {
 		wp.wg.Add(1)
@@ -36,21 +35,21 @@ func (wp *WorkerPool) Start() {
 	}
 }
 
-// worker is the function each goroutine runs - pulls jobs from queue and processes them
+// function of each worker -> pulls jobs from job queue while there are jobs in there
 func (wp *WorkerPool) worker() {
 	defer wp.wg.Done()
 	for job := range wp.jobQueue {
-		// Process the job - this replaces the current plotRoutes call
+		// actual plotting
 		plotRoutes(job.routes, job.p1, job.p2, job.tile, job.zoom)
 	}
 }
 
-// Submit adds a new plotting job to the queue (blocks if queue is full)
+// adds job to the queue
 func (wp *WorkerPool) Submit(job PlotJob) {
 	wp.jobQueue <- job
 }
 
-// Close waits for all jobs to complete and shuts down workers
+// waits for jobs to complete than stops workers
 func (wp *WorkerPool) Close() {
 	close(wp.jobQueue)
 	wp.wg.Wait()

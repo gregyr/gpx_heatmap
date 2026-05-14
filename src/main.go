@@ -5,7 +5,6 @@ import (
 	"image/color"
 	"log"
 	"math"
-	"modular_crawler/parsing"
 	"os"
 	"runtime"
 	"slices"
@@ -195,13 +194,13 @@ func getRouteFromEntryString(entry string) (Route, error) {
 		return Route{}, err
 	}
 	// get Node Structure
-	rootNode, err := parsing.ParseXML(string(fileContent))
+	rootNode, err := ParseXML(string(fileContent))
 	if err != nil {
 		return Route{}, err
 	}
 
 	// extract nodes storing position info
-	positionNodes := parsing.EvaluateXPath(rootNode, "/gpx/trk/trkseg/trkpt")
+	positionNodes := EvaluateXPath(rootNode, "/gpx/trk/trkseg/trkpt")
 	route := []Point{}
 	// parse the node attributes storing the lat and lon info
 	minLat := math.Inf(1)

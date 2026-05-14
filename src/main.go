@@ -21,9 +21,12 @@ import (
 
 var inputDirectory string = ""
 
+var newGpxPath string = "newgpx.txt"
+
 var ignoreDir string = ""
 var recursiveSearch bool = false
 var outputDirectory string = "tiles/"
+var onlyNewTiles bool = false
 
 var zoomLevels = []int{5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 
@@ -78,7 +81,7 @@ func generateTileImages() {
 		os.Mkdir(outputDirectory, os.ModePerm)
 	}
 
-	points, routes := extractAllPointsAndRoutes()
+	points, routes, newPoints := extractAllPointsAndRoutes() // always load all points as it would be too annoying / not efficient to check if a route intersects a new route
 
 	numWorkers := runtime.NumCPU()
 	bufferSize := 100
@@ -87,7 +90,12 @@ func generateTileImages() {
 
 	jobCount := 0
 	for _, zoom := range zoomLevels {
-		tiles := getTilesWithData(points, zoom)
+		var tiles map[Tile]bool
+		if onlyNewTiles {
+			tiles = getTilesWithData(newPoints, zoom) // only get Tiles that intersect the new points
+		} else {
+			tiles = getTilesWithData(points, zoom)
+		}
 		log.Println("Generating zoom", zoom)
 		fmt.Print("\033[?25l")
 		tileCount := 0
@@ -116,8 +124,21 @@ func generateTileImages() {
 
 // extracts all points and routes from all gpx files in the given inputDirectory
 // a route is a list of points
-// returns a list of all points aswell as a list of routes
-func extractAllPointsAndRoutes() ([]Point, []Route) {
+// returns a list of all points aswell as a list of routes and a list of all new Points, which is empty if not needed
+func extractAllPointsAndRoutes() ([]Point, []Route, []Point) {
+
+	newGpxFileNames := []string{}
+	if onlyNewTiles {
+		content, err := os.ReadFile(newGpxPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		stringContent := string(content)
+		newGpxFileNames = strings.Split(stringContent, "\n")
+		for i, n := range newGpxFileNames {
+			newGpxFileNames[i] = strings.Trim(n, " \n\r")
+		}
+	}
 
 	entries := []string{} // MAKE THIS OPTIONALLY RECURSIVE OR IGNORE ENTRY
 	if recursiveSearch {
@@ -171,6 +192,7 @@ func extractAllPointsAndRoutes() ([]Point, []Route) {
 	}
 	points := []Point{} // all points
 	routes := []Route{} // all points by route
+	newPoints := []Point{}
 
 	for i, e := range entries {
 		log.Println("Extracting Route", i, e)
@@ -180,8 +202,11 @@ func extractAllPointsAndRoutes() ([]Point, []Route) {
 		}
 		points = slices.Concat(points, route.points)
 		routes = append(routes, route)
+		if onlyNewTiles && slices.Contains(newGpxFileNames, strings.Split(e, "/")[len(strings.Split(e, "/"))-1]) {
+			newPoints = slices.Concat(newPoints, route.points)
+		}
 	}
-	return points, routes
+	return points, routes, newPoints
 }
 
 // extracts the route from an entry
@@ -396,4 +421,17 @@ func setupEnvironment() {
 	if ignoreDirOk {
 		ignoreDir = ignoreDirEnv
 	}
+
+	onlyNewTilesEnv, onlyNewTilesOk := os.LookupEnv("ONLY_NEW")
+	if onlyNewTilesOk && onlyNewTilesEnv == "true" {
+		onlyNewTiles = true
+	} else if recursiveOk && recursiveEnv != "false" {
+		log.Println("Not a valid input for Environment Variable 'ONLY_NEW', expects: true/false, using false")
+	}
+
+	newGpxPathEnv, newGpxPathOk := os.LookupEnv("NEW_GPX_PATH")
+	if newGpxPathOk {
+		newGpxPath = newGpxPathEnv
+	}
+
 }

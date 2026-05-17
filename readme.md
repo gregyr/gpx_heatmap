@@ -7,7 +7,7 @@ Generates a heatmap from `.gpx` files. It creates a Tilemap to be overlayed on a
 
 #### Usage
 
-Create a `.env`, like `.env.example` shows
+Create a `.env`, like `.env.example` shows <br>
 Run `go build .` in the `src/` directory to build the application and run it **or** <br>
 run `go run .` in the `src/` directory to build and run the application
 

@@ -14,7 +14,7 @@ run `go run .` in the `src/` directory to build and run the application
 ### Environment variables
 
 #### Necessary Variables
-GPX_DIRECTORY=Path/to/the/GPX/Files/ # needs to have a trailing /
+- `GPX_DIRECTORY` Path to the GPX Files (needs to have a trailing /)
 
 #### Optional variables
 - `COLOR` colorscheme (red, blue, red-blue, blue-red) leave empty to use default(red), if not provided, the program prompts you to select a color

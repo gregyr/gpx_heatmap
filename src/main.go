@@ -53,7 +53,7 @@ type ColorScheme struct {
 
 var colorSchemes map[string]ColorScheme = map[string]ColorScheme{
 	"red": {
-		colorStart: color.RGBA{R: 223, G: 0, B: 64, A: 255},
+		colorStart: color.RGBA{R: 223, G: 0, B: 64, A: 100},
 		colorEnd:   color.RGBA{R: 255, G: 192, B: 146, A: 255}},
 	"blue": {
 		colorStart: color.RGBA{R: 0, G: 64, B: 111, A: 255},
@@ -324,12 +324,15 @@ func plotRoutes(routes []Route, p1 Point, p2 Point, tile Tile, zoom int) {
 	os.MkdirAll(outPath, os.ModePerm)
 
 	// color pixels based on their alpha value
+
 	imageBounds := c.Image().Bounds()
 	for x := range imageBounds.Dx() {
 		for y := range imageBounds.Dy() {
 			pxlColor := c.Image().At(x, y)
 			_, _, _, a := pxlColor.RGBA()
+
 			if a != 0 {
+
 				lightness := float64(a) / 65535.0
 				r := uint8(float64(colorScheme.colorStart.R)*(1-lightness) + float64(colorScheme.colorEnd.R)*lightness)
 				g := uint8(float64(colorScheme.colorStart.G)*(1-lightness) + float64(colorScheme.colorEnd.G)*lightness)

@@ -1,13 +1,8 @@
-module gpx_heatmap
+module github.com/gregyr/gpx_heatmap
 
 go 1.25.6
 
-replace modular_crawler => ../../xml_parser/src/
-
-require (
-	gonum.org/v1/plot v0.17.0
-	modular_crawler v0.0.0-00010101000000-000000000000
-)
+require gonum.org/v1/plot v0.17.0
 
 require (
 	codeberg.org/go-fonts/liberation v0.5.0 // indirect

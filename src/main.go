@@ -16,6 +16,7 @@ import (
 	"gonum.org/v1/plot/vg/draw"
 	"gonum.org/v1/plot/vg/vgimg"
 
+	"github.com/gregyr/gpx_heatmap/src/xml"
 	"github.com/joho/godotenv"
 )
 
@@ -219,13 +220,13 @@ func getRouteFromEntryString(entry string) (Route, error) {
 		return Route{}, err
 	}
 	// get Node Structure
-	rootNode, err := ParseXML(string(fileContent))
+	rootNode, err := xml.ParseXML(string(fileContent))
 	if err != nil {
 		return Route{}, err
 	}
 
 	// extract nodes storing position info
-	positionNodes := EvaluateXPath(rootNode, "/gpx/trk/trkseg/trkpt")
+	positionNodes := xml.EvaluateXPath(rootNode, "/gpx/trk/trkseg/trkpt")
 	route := []Point{}
 	// parse the node attributes storing the lat and lon info
 	minLat := math.Inf(1)

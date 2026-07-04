@@ -1,5 +1,4 @@
 module github.com/gregyr/gpx_heatmap/src
-
 go 1.25.6
 
 require gonum.org/v1/plot v0.17.0

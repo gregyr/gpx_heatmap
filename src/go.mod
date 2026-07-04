@@ -1,4 +1,4 @@
-module github.com/gregyr/gpx_heatmap
+module github.com/gregyr/gpx_heatmap/src
 
 go 1.25.6
 

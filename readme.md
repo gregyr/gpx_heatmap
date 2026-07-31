@@ -24,7 +24,8 @@ run `go run .` in the `src/` directory to build and run the application
 - `ONLY_NEW` whether to only generate tiles for new .gpx files, if true, a txt file with file names needs to be provided via `NEW_PATH_GPX` (default is `newgpx.txt`)
 - `NEW_GPX_PATH` path to a txt file with the filenames of new gpx files, seperated by newlines
 
-### Plans
+### What's open
 
-- Add an option to add custom colorschemes through envs
-- add custom zoomlevels through env
+- Remove "hardcoded" newgpx.txt for checking what files need to be generated -> move to an interface that can provide these details from a database or local file or whatever
+- Add support for using previously calculated bounds for every file to optimise file loading -> probably through the above mentioned interface
+- Improve xml parser

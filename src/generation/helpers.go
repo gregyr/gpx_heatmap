@@ -1,4 +1,4 @@
-package main
+package generation
 
 import (
 	"errors"
@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"math"
 	"os"
+	"strings"
 )
 
 func pointToTile(point Point, zoom int) Tile {
@@ -48,4 +49,9 @@ func printProgress(max int, current int) {
 		fmt.Print(" ")
 	}
 	fmt.Printf("] %5.2f%% - %v/%v", progress*100, current, max)
+}
+
+func tempPathToKey(tempPath string) string {
+	split := strings.Split(tempPath, "/")
+	return strings.Join(split[len(split)-3:], "/")
 }

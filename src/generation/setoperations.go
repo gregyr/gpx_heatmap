@@ -1,4 +1,4 @@
-package main
+package generation
 
 func createTileSet() map[Tile]bool {
 	return map[Tile]bool{}

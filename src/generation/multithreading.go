@@ -38,6 +38,7 @@ type PlotJob struct {
 	p2          Point
 	routes      []Route
 	stagedFiles *SafeStringSet
+	config      RunConfig
 }
 
 // manages a pool of goroutines
@@ -69,7 +70,7 @@ func (wp *WorkerPool) worker() {
 	defer wp.wg.Done()
 	for job := range wp.jobQueue {
 		// actual plotting
-		plotRoutes(job.routes, job.p1, job.p2, job.tile, job.zoom, job.stagedFiles)
+		plotRoutes(job.routes, job.p1, job.p2, job.tile, job.zoom, job.stagedFiles, job.config)
 	}
 }
 

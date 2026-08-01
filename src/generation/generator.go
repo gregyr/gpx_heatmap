@@ -10,7 +10,6 @@ import (
 	"runtime"
 	"slices"
 	"strconv"
-	"strings"
 
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
@@ -18,18 +17,7 @@ import (
 	"gonum.org/v1/plot/vg/vgimg"
 
 	"github.com/gregyr/gpx_heatmap/src/xml"
-	"github.com/joho/godotenv"
 )
-
-var inputDirectory string = ""
-
-var newGpxPath string = "newgpx.txt"
-
-var ignoreDir string = ""
-var recursiveSearch bool = false
-var OutputDirectory string = "tiles/"
-var stagingDirectory string
-var onlyNewTiles bool = false
 
 var zoomLevels = []int{5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 
@@ -54,6 +42,13 @@ type ColorScheme struct {
 	colorEnd   color.RGBA
 }
 
+type RunConfig struct {
+	OnlyNew          bool
+	Prefix           string
+	Color            string
+	stagingDirectory string
+}
+
 var colorSchemes map[string]ColorScheme = map[string]ColorScheme{
 	"red": {
 		colorStart: color.RGBA{R: 223, G: 0, B: 64, A: 100},
@@ -71,23 +66,21 @@ var colorSchemes map[string]ColorScheme = map[string]ColorScheme{
 
 var colorScheme = colorSchemes["red"]
 
-func Run(s store) {
-
-	generateTileImages(s)
-}
-
-func generateTileImages(s store) {
+func Run(tileStore store, gpxKeyStore gpxKeyStore, gpxFileStore store, config RunConfig) error {
 
 	// create staging directory
-	tempDir, err := os.MkdirTemp(".", "tiles-*")
+	tempDir, err := os.MkdirTemp("", "tiles-*")
 	if err != nil {
 		fmt.Printf("Failed to initialize staging director: %v", err)
 		os.Exit(1)
 	}
-	stagingDirectory = tempDir
+	config.stagingDirectory = tempDir
 	stagedFiles := NewSafeStringSet()
 
-	points, routes, newPoints := extractAllPointsAndRoutes() // always load all points as it would be too annoying / not efficient to check if a route intersects a new route
+	points, routes, newPoints, err := extractAllPointsAndRoutes(gpxKeyStore, gpxFileStore, config) // always load all points as it would be too annoying / not efficient to check if a route intersects a new route
+	if err != nil {
+		return err
+	}
 
 	numWorkers := runtime.NumCPU()
 	bufferSize := 100
@@ -97,7 +90,7 @@ func generateTileImages(s store) {
 	jobCount := 0
 	for _, zoom := range zoomLevels {
 		var tiles map[Tile]bool
-		if onlyNewTiles {
+		if config.OnlyNew {
 			tiles = getTilesWithData(newPoints, zoom) // only get Tiles that intersect the new points
 		} else {
 			tiles = getTilesWithData(points, zoom)
@@ -116,6 +109,7 @@ func generateTileImages(s store) {
 				p2:          p2,
 				routes:      routes,
 				stagedFiles: stagedFiles,
+				config:      config,
 			}
 			pool.Submit(job)
 			jobCount++
@@ -126,6 +120,9 @@ func generateTileImages(s store) {
 	}
 
 	pool.Close()
+
+	progress := 0
+	log.Println("Writing Final Files to Store")
 	for path, f := range stagedFiles.values {
 		defer f.Close()
 		if _, err := f.Seek(0, io.SeekStart); err != nil {
@@ -139,106 +136,60 @@ func generateTileImages(s store) {
 			continue
 		}
 
-		fmt.Println(len(data))
-		s.WriteFileContent(tempPathToKey(path), data)
+		tileStore.WriteFileContent(tempPathToKey(path, config.Prefix), data)
+		progress++
+		printProgress(len(stagedFiles.values), progress)
 	}
+	fmt.Println("\033[?25h")
 	log.Printf("Processed %d tiles\n", jobCount)
 	os.RemoveAll(tempDir) //cleanup
+	return nil
 }
 
 // extracts all points and routes from all gpx files in the given inputDirectory
 // a route is a list of points
 // returns a list of all points aswell as a list of routes and a list of all new Points, which is empty if not needed
-func extractAllPointsAndRoutes() ([]Point, []Route, []Point) {
+func extractAllPointsAndRoutes(gpxKeyStore gpxKeyStore, gpxFileStore store, config RunConfig) ([]Point, []Route, []Point, error) {
 
 	newGpxFileNames := []string{}
-	if onlyNewTiles {
-		content, err := os.ReadFile(newGpxPath)
+	if config.OnlyNew {
+		var err error
+		newGpxFileNames, err = gpxKeyStore.GetNewActivityFileKeys()
 		if err != nil {
-			log.Fatal(err)
-		}
-		stringContent := string(content)
-		newGpxFileNames = strings.Split(stringContent, "\n")
-		for i, n := range newGpxFileNames {
-			newGpxFileNames[i] = strings.Trim(n, " \n\r")
+			return []Point{}, []Route{}, []Point{}, err
 		}
 	}
 
-	entries := []string{} // MAKE THIS OPTIONALLY RECURSIVE OR IGNORE ENTRY
-	if recursiveSearch {
-		dirs := []string{} // store dir paths
-
-		// dir Entries of input dir
-		dirEntries, err := os.ReadDir(inputDirectory)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		// fill dirs with the dirs from input dir
-		for _, e := range dirEntries {
-			if e.IsDir() {
-				dirs = append(dirs, e.Name())
-			} else {
-				entries = append(entries, e.Name())
-			}
-		}
-
-		// pop element from dir list as long as there are elements
-		for len(dirs) > 0 {
-			dir := dirs[0]
-			dirs = dirs[1:]
-			if ignoreDir != "" && strings.Contains(dir, ignoreDir) { // check if valid dir name else ignore
-				continue
-			}
-			entrs, err := os.ReadDir(inputDirectory + dir) // get all entries
-			if err != nil {
-				log.Fatal(err)
-			}
-			for _, e := range entrs { // add entries recursively to dirs or entries depending on filetype
-				if e.IsDir() {
-					dirs = append(dirs, dir+"/"+e.Name()) // name relative to input directory
-				} else {
-					entries = append(entries, dir+"/"+e.Name())
-				}
-			}
-		}
-
-	} else {
-		e, err := os.ReadDir(inputDirectory)
-		if err != nil {
-			log.Fatal(err)
-		}
-		for _, en := range e {
-			if !en.IsDir() {
-				entries = append(entries, en.Name())
-			}
-		}
+	entries, err := gpxKeyStore.GetActivityFileKeys()
+	if err != nil {
+		return []Point{}, []Route{}, []Point{}, err
 	}
+
 	points := []Point{} // all points
 	routes := []Route{} // all points by route
 	newPoints := []Point{}
 
 	for i, e := range entries {
 		log.Println("Extracting Route", i, e)
-		route, err := getRouteFromEntryString(e)
+		route, err := getRouteFromEntryString(e, gpxFileStore)
 		if err != nil {
 			log.Println(err)
 		}
 		points = slices.Concat(points, route.points)
 		routes = append(routes, route)
-		if onlyNewTiles && slices.Contains(newGpxFileNames, strings.Split(e, "/")[len(strings.Split(e, "/"))-1]) {
+		if config.OnlyNew && slices.Contains(newGpxFileNames, e) {
 			newPoints = slices.Concat(newPoints, route.points)
 		}
 	}
-	return points, routes, newPoints
+	return points, routes, newPoints, nil
 }
 
 // extracts the route from an entry
 // the entry is just the entry itself and does not contain the path
-func getRouteFromEntryString(entry string) (Route, error) {
+func getRouteFromEntryString(entry string, gpxStore store) (Route, error) {
 
 	// load file
-	fileContent, err := os.ReadFile(inputDirectory + entry)
+	fileContent, err := gpxStore.GetFileContent(entry)
 	if err != nil {
 		return Route{}, err
 	}
@@ -274,30 +225,9 @@ func getRouteFromEntryString(entry string) (Route, error) {
 	return Route{points: route, max: Point{latitude: maxLat, longitude: maxLon}, min: Point{latitude: minLat, longitude: minLon}}, nil
 }
 
-// gets all the tiles for a given zoom level with data points in them
-func getTilesWithData(points []Point, zoom int) map[Tile]bool {
-	tileSet := createTileSet()
-
-	for _, point := range points {
-		tile := pointToTile(point, zoom)
-		tileSet[tile] = true
-	}
-	return tileSet
-}
-
-// converts a list of points to plotter.XYs
-func pointListToPlotterXY(route []Point) plotter.XYs {
-	pts := make(plotter.XYs, len(route))
-	for i := range pts {
-		pts[i].X = route[i].longitude
-		pts[i].Y = route[i].latitude
-	}
-	return pts
-}
-
 // plots a route respective on a tile at a given zoom level
 // p1 and p2 are the tiles XY and X+1Y+1 coordinates
-func plotRoutes(routes []Route, p1 Point, p2 Point, tile Tile, zoom int, stagedFiles *SafeStringSet) {
+func plotRoutes(routes []Route, p1 Point, p2 Point, tile Tile, zoom int, stagedFiles *SafeStringSet, config RunConfig) {
 	p := plot.New()
 
 	var routeBrightness uint8 = 50
@@ -344,7 +274,7 @@ func plotRoutes(routes []Route, p1 Point, p2 Point, tile Tile, zoom int, stagedF
 	p.Draw(draw.New(c))
 
 	// format output
-	outPath := fmt.Sprintf("%s/%v/%v/", stagingDirectory, zoom, tile.x)
+	outPath := fmt.Sprintf("%s/%v/%v/", config.stagingDirectory, zoom, tile.x)
 	os.MkdirAll(outPath, os.ModePerm)
 
 	// color pixels based on their alpha value
@@ -384,80 +314,7 @@ func plotRoutes(routes []Route, p1 Point, p2 Point, tile Tile, zoom int, stagedF
 }
 
 // sets the colorscheme based on a given string, handles wrong strings
-func setColorScheme(color string) {
-	cs, ok := colorSchemes[color]
-	if ok {
-		OutputDirectory = fmt.Sprintf("%s_%s", OutputDirectory, color)
-		colorScheme = cs
-	}
-}
-
-// loads environment variables from .env
-// local config for missing optional Vars
-func SetupEnvironment() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
-
-	inputDirectoryEnv, inputDirOk := os.LookupEnv("GPX_DIRECTORY")
-
-	if !inputDirOk {
-		log.Fatal("Missing Environment: GPX_DIRECTORY")
-	} else {
-		inputDirectory = inputDirectoryEnv
-	}
-
-	outputEnv, outputOk := os.LookupEnv("OUTPUT")
-	if outputOk && len(outputEnv) > 0 {
-		OutputDirectory = outputEnv
-	}
-
-	colorEnv, colorOk := os.LookupEnv("COLOR")
-
-	if colorOk {
-		setColorScheme(colorEnv)
-	} else {
-		log.Println("Missing optional env 'COLOR', choose Color")
-		var color string
-		for name := range colorSchemes {
-			fmt.Printf("Color \"%s\"\n", name)
-		}
-		fmt.Print("Choose Color:")
-		fmt.Scanln(&color)
-		setColorScheme(color)
-	}
-
-	recursiveEnv, recursiveOk := os.LookupEnv("RECURSIVE")
-	if recursiveOk && recursiveEnv == "true" {
-		recursiveSearch = true
-	} else if recursiveOk && recursiveEnv == "false" {
-		recursiveSearch = false
-	} else {
-		log.Println("Missing optional env 'RECURSIVE', choose:")
-		var runs string
-		fmt.Println("Search input dir recursively? (empty input for no, input anything for yes)")
-		fmt.Scanln(&runs)
-		if len(runs) > 0 {
-			recursiveSearch = true
-		}
-	}
-
-	ignoreDirEnv, ignoreDirOk := os.LookupEnv("IGNORE_DIR")
-	if ignoreDirOk {
-		ignoreDir = ignoreDirEnv
-	}
-
-	onlyNewTilesEnv, onlyNewTilesOk := os.LookupEnv("ONLY_NEW")
-	if onlyNewTilesOk && onlyNewTilesEnv == "true" {
-		onlyNewTiles = true
-	} else if recursiveOk && recursiveEnv != "false" {
-		log.Println("Not a valid input for Environment Variable 'ONLY_NEW', expects: true/false, using false")
-	}
-
-	newGpxPathEnv, newGpxPathOk := os.LookupEnv("NEW_GPX_PATH")
-	if newGpxPathOk {
-		newGpxPath = newGpxPathEnv
-	}
-
+func ValidColorScheme(color string) bool {
+	_, ok := colorSchemes[color]
+	return ok
 }

@@ -1,4 +1,4 @@
-package main
+package generation
 
 import (
 	"errors"
@@ -6,6 +6,10 @@ import (
 	"io/fs"
 	"math"
 	"os"
+	"path/filepath"
+	"strings"
+
+	"gonum.org/v1/plot/plotter"
 )
 
 func pointToTile(point Point, zoom int) Tile {
@@ -48,4 +52,30 @@ func printProgress(max int, current int) {
 		fmt.Print(" ")
 	}
 	fmt.Printf("] %5.2f%% - %v/%v", progress*100, current, max)
+}
+
+// gets all the tiles for a given zoom level with data points in them
+func getTilesWithData(points []Point, zoom int) map[Tile]bool {
+	tileSet := createTileSet()
+
+	for _, point := range points {
+		tile := pointToTile(point, zoom)
+		tileSet[tile] = true
+	}
+	return tileSet
+}
+
+// converts a list of points to plotter.XYs
+func pointListToPlotterXY(route []Point) plotter.XYs {
+	pts := make(plotter.XYs, len(route))
+	for i := range pts {
+		pts[i].X = route[i].longitude
+		pts[i].Y = route[i].latitude
+	}
+	return pts
+}
+
+func tempPathToKey(tempPath, prefix string) string {
+	split := strings.Split(tempPath, "/")
+	return filepath.Join(prefix, strings.Join(split[len(split)-3:], "/"))
 }

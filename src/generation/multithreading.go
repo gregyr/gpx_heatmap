@@ -1,14 +1,44 @@
-package main
+package generation
 
-import "sync"
+import (
+	"os"
+	"sync"
+)
+
+// safe shared set for staged file paths
+// used by worker goroutines without racing on a plain map
+
+type SafeStringSet struct {
+	mu     sync.RWMutex
+	values map[string]*os.File
+}
+
+func NewSafeStringSet() *SafeStringSet {
+	return &SafeStringSet{values: make(map[string]*os.File)}
+}
+
+func (s *SafeStringSet) Add(value string, file *os.File) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.values[value] = file
+}
+
+func (s *SafeStringSet) Contains(value string) bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	_, ok := s.values[value]
+	return ok
+}
 
 // tile plotting job
 type PlotJob struct {
-	tile   Tile
-	zoom   int
-	p1     Point
-	p2     Point
-	routes []Route
+	tile        Tile
+	zoom        int
+	p1          Point
+	p2          Point
+	routes      []Route
+	stagedFiles *SafeStringSet
+	config      RunConfig
 }
 
 // manages a pool of goroutines
@@ -40,7 +70,7 @@ func (wp *WorkerPool) worker() {
 	defer wp.wg.Done()
 	for job := range wp.jobQueue {
 		// actual plotting
-		plotRoutes(job.routes, job.p1, job.p2, job.tile, job.zoom)
+		plotRoutes(job.routes, job.p1, job.p2, job.tile, job.zoom, job.stagedFiles, job.config)
 	}
 }
 

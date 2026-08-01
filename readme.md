@@ -18,7 +18,7 @@ The Plan is to support different environments such as GCP Hosted, local, etc. Cu
 ## Stores
 This is where the `.gpx` files, tiles and data about new activites will be stored.
 ### Gpx Store
-The Gpx Store is where the `.gpx` Files live. It should have the following structure:
+The Gpx Store is where the `.gpx` Files live. It can be a bucket, local directory, etc. It should have the following structure:
 ```
 root
  ├── run
@@ -33,7 +33,7 @@ Directories may be omitted or added, a directory may only hold `.gpx` files. If 
 The Gpx Key Store provides the Keys of Gpx Files relative to the Gpx Store's root, this is seperated, so that for different setups Gpx Key's may be provided through a database or similar.
 
 ### Tile Store
-The Tile store is where the tiles will be stored
+The Tile store is where the tiles will be stored, this again can be a bucket, local directory or similar
 ```
 tiles
  ├── A

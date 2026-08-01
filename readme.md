@@ -27,7 +27,7 @@ root
  ├── ski
  └── other
 ```
-Directories may be omitted or added, a directory may only hold `.gpx` files. If you have for example a swimming directory, with only swimming `.gpx` files it can be added
+Directories may be omitted or added, a directory may only hold `.gpx` files. If you have for example a swimming directory, with only swimming `.gpx` files it can be added. The `other` directory will be ignored when loading all files.
 
 ### Gpx Key Store
 The Gpx Key Store provides the Keys of Gpx Files relative to the Gpx Store's root, this is seperated, so that for different setups Gpx Key's may be provided through a database or similar.

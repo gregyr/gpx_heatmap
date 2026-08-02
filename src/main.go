@@ -24,6 +24,8 @@ func main() {
 	switch environment {
 	case "local":
 		runError = generation.Run(SetupLocal())
+	case "local_db":
+		runError = generation.Run(SetupLocalDatabase())
 	default:
 		runError = fmt.Errorf("Missing or Invalid Environment\nProvided: %s\nValid Environments: \"local\"", environment)
 	}
@@ -86,4 +88,61 @@ func SetupLocal() (generation.LocalStore, generation.LocalGpxKeyStore, generatio
 	}
 
 	return store, gpxKeyStore, gpxFileStore, config
+}
+
+func SetupLocalDatabase() (generation.LocalStore, generation.LocalGpxKeyDatabase, generation.LocalStore, generation.RunConfig) {
+
+	var store generation.LocalStore
+	var gpxKeyDatabase generation.LocalGpxKeyDatabase
+	var gpxFileStore generation.LocalStore
+	var config generation.RunConfig
+
+	inputDirectoryEnv, inputDirOk := os.LookupEnv("GPX_DIRECTORY")
+	if !inputDirOk {
+		log.Fatal("Missing Environment: GPX_DIRECTORY")
+	} else {
+		gpxFileStore.RootDir = inputDirectoryEnv
+	}
+
+	// empty means all so this is fine
+	activityType := os.Getenv("ACTIVITY_TYPE")
+	gpxDatabaseEnv, newGpxPathOk := os.LookupEnv("GPX_DATABASE")
+	afterDateEnv := os.Getenv("AFTER_DATE")
+	if newGpxPathOk {
+		var err error
+		gpxKeyDatabase, err = generation.OpenDB(gpxDatabaseEnv, afterDateEnv, activityType)
+		if err != nil {
+			log.Fatalf("Failed to open gpxKeyDatabase: %v", err)
+		}
+	}
+
+	outputEnv, outputOk := os.LookupEnv("OUTPUT_ROOT")
+	if outputOk && len(outputEnv) > 0 {
+		store.RootDir = outputEnv
+	} else {
+		log.Fatal("Missing Environment: OUTPUT_ROOT")
+	}
+	colorEnv, colorOk := os.LookupEnv("COLOR")
+
+	if colorOk && generation.ValidColorScheme(colorEnv) {
+		config.Color = colorEnv
+	} else {
+		config.Color = "red"
+	}
+
+	onlyNewTilesEnv, onlyNewTilesOk := os.LookupEnv("ONLY_NEW")
+	if onlyNewTilesOk && onlyNewTilesEnv == "true" {
+		config.OnlyNew = true
+	} else {
+		config.OnlyNew = false
+	}
+
+	prefixEnv, prefixOk := os.LookupEnv("OUTPUT_PREFIX")
+	if !prefixOk {
+		config.Prefix = "tiles"
+	} else {
+		config.Prefix = prefixEnv
+	}
+
+	return store, gpxKeyDatabase, gpxFileStore, config
 }

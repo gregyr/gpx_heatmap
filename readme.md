@@ -42,6 +42,9 @@ tiles
 ### Local Setup
 For the `"local"` Setup, you should provide a directory in the form of a Gpx Store and a Tile Store, the Gpx Key Store provides the Keys from the Gpx Store. The path's to these have to be provided through [environment variables](#local-setup)
 
+### Local Database Setup
+For the `"local_db"` Setup, you should provide a directory in the form of a Gpx Store and a Tile Store, the Gpx Key Database has to be provided through a file and has to contain a file_key, date and type column. The date column has to have activity dates in the format `"2006-01-02"` and the type needs to match the Gpx Store's type directories. The path's to these have to be provided through [environment variables](#local-setup)
+
 ### Environment variables
 
 #### Config Variables
@@ -56,6 +59,13 @@ For the `"local"` Setup, you should provide a directory in the form of a Gpx Sto
 - `GPX_DIRECTORY` **mandatory**, configures the path to your [Gpx Store](#gpx-store) Directory
 - `OUTPUT_ROOT` **mandatory**, configures the path to your [Tile Store](#tile-store) Directory
 - `NEW_GPX_PATH` **optional**, if `ONLY_NEW` is enabled, this is how you provide the data for which activities are new, the format can be found in the newgpx.txt.example file
+
+#### `"local_db"`-Setup variables
+
+- `GPX_DIRECTORY` **mandatory**, configures the path to your [Gpx Store](#gpx-store) Directory
+- `OUTPUT_ROOT` **mandatory**, configures the path to your [Tile Store](#tile-store) Directory
+- `GPX_DATABASE` **mandatory**, configures the path to your [Gpx Key Database](#gpx-key-store) File
+- `AFTER_DATE` **optional**, sets the date after which activities are classified as new, if not provided, every activity will be classified as new
 
 ### What's open
 

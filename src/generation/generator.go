@@ -1,12 +1,12 @@
 package generation
 
 import (
+	"bytes"
 	"fmt"
 	"image/color"
-	"io"
 	"log"
 	"math"
-	"os"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"strconv"
@@ -43,10 +43,9 @@ type ColorScheme struct {
 }
 
 type RunConfig struct {
-	OnlyNew          bool
-	Prefix           string
-	Color            string
-	stagingDirectory string
+	OnlyNew bool
+	Prefix  string
+	Color   string
 }
 
 var colorSchemes map[string]ColorScheme = map[string]ColorScheme{
@@ -69,12 +68,6 @@ var colorScheme = colorSchemes["red"]
 func Run(tileStore store, gpxKeyStore gpxKeyStore, gpxFileStore store, config RunConfig) error {
 
 	// create staging directory
-	tempDir, err := os.MkdirTemp("", "tiles-*")
-	if err != nil {
-		fmt.Printf("Failed to initialize staging director: %v", err)
-		os.Exit(1)
-	}
-	config.stagingDirectory = tempDir
 	stagedFiles := NewSafeStringSet()
 
 	points, routes, newPoints, err := extractAllPointsAndRoutes(gpxKeyStore, gpxFileStore, config) // always load all points as it would be too annoying / not efficient to check if a route intersects a new route
@@ -124,25 +117,12 @@ func Run(tileStore store, gpxKeyStore gpxKeyStore, gpxFileStore store, config Ru
 	progress := 0
 	log.Println("Writing Final Files to Store")
 	for path, f := range stagedFiles.values {
-		defer f.Close()
-		if _, err := f.Seek(0, io.SeekStart); err != nil {
-			log.Printf("seek failed: %v", err)
-			continue
-		}
-
-		data, err := io.ReadAll(f)
-		if err != nil {
-			log.Printf("read failed: %v", err)
-			continue
-		}
-
-		tileStore.WriteFileContent(tempPathToKey(path, config.Prefix), data)
+		tileStore.WriteFileContent(filepath.Join(config.Prefix, path), f)
 		progress++
 		printProgress(len(stagedFiles.values), progress)
 	}
 	fmt.Println("\033[?25h")
 	log.Printf("Processed %d tiles\n", jobCount)
-	os.RemoveAll(tempDir) //cleanup
 	return nil
 }
 
@@ -274,10 +254,7 @@ func plotRoutes(routes []Route, p1 Point, p2 Point, tile Tile, zoom int, stagedF
 	p.Draw(draw.New(c))
 
 	// format output
-	outPath := fmt.Sprintf("%s/%v/%v/", config.stagingDirectory, zoom, tile.x)
-	os.MkdirAll(outPath, os.ModePerm)
-
-	// color pixels based on their alpha value
+	outPath := fmt.Sprintf("%v/%v/%v.png", zoom, tile.x, tile.y)
 
 	imageBounds := c.Image().Bounds()
 	for x := range imageBounds.Dx() {
@@ -296,20 +273,13 @@ func plotRoutes(routes []Route, p1 Point, p2 Point, tile Tile, zoom int, stagedF
 		}
 	}
 
-	outputFile := fmt.Sprintf("%s%v.png", outPath, tile.y)
-	// output file
-	f, err := os.Create(outputFile)
+	var buf bytes.Buffer
+	_, err := c.WriteTo(&buf)
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	_, err = c.WriteTo(f)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	if stagedFiles != nil {
-		stagedFiles.Add(outputFile, f)
+		stagedFiles.Add(outPath, buf.Bytes())
 	}
 }
 

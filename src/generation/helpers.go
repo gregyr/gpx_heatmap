@@ -43,15 +43,22 @@ func printProgress(max int, current int) {
 
 	barLength := 20
 
-	fmt.Print("\r[")
+	var buf strings.Builder
+
+	buf.WriteString("\r[")
+	progressPrev := float64(current-1) / float64(max)
 	progress := float64(current) / float64(max)
+	if int(progress*float64(barLength)+0.5) == int(progressPrev*float64(barLength)+0.5) && current != max {
+		return
+	}
 	for range int(progress*float64(barLength) + 0.5) { // + 0.5 for correct rounding
-		fmt.Print("=")
+		buf.WriteString("=")
 	}
 	for range int(float64(1-progress)*float64(barLength) + 0.5) {
-		fmt.Print(" ")
+		buf.WriteString(" ")
 	}
-	fmt.Printf("] %5.2f%% - %v/%v", progress*100, current, max)
+	fmt.Fprintf(&buf, "] %5.2f%% - %v/%v", progress*100, current, max)
+	fmt.Print(buf.String())
 }
 
 // gets all the tiles for a given zoom level with data points in them

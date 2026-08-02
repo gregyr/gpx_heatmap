@@ -1,10 +1,13 @@
 package generation
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	_ "modernc.org/sqlite"
 )
 
 type store interface {
@@ -34,6 +37,12 @@ type LocalGpxKeyStore struct {
 	Type       ActivityType
 	RootDir    string
 	NewGpxFile string
+}
+
+type LocalGpxKeyDatabase struct {
+	Type      ActivityType
+	AfterDate string
+	Database  *sql.DB
 }
 
 type LocalStore struct {
@@ -118,4 +127,77 @@ func (p LocalGpxKeyStore) GetNewActivityFileKeys() ([]string, error) {
 		newGpxFileNames[i] = strings.Trim(n, " \n\r")
 	}
 	return newGpxFileNames, nil
+}
+
+func (p LocalGpxKeyDatabase) GetActivityFileKeys() ([]string, error) {
+
+	var query string
+	if p.Type == typeAll || p.Type == typeAllExplicit {
+		query = "SELECT file_key FROM activities WHERE type NOT LIKE \"other\""
+	} else {
+		query = fmt.Sprintf("SELECT file_key FROM activities WHERE type LIKE \"%s\"", p.Type)
+	}
+
+	rows, sqlerr := p.Database.Query(query)
+
+	if sqlerr != nil {
+		return []string{}, sqlerr
+	}
+
+	entries := []string{}
+
+	for rows.Next() {
+		var fileKey string
+		err := rows.Scan(&fileKey)
+		if err == sql.ErrNoRows {
+			return []string{}, err
+		}
+		if err != nil {
+			return []string{}, err
+		}
+
+		entries = append(entries, fileKey)
+
+	}
+	return entries, nil
+}
+
+func (p LocalGpxKeyDatabase) GetNewActivityFileKeys() ([]string, error) {
+	var query string
+	if p.Type == typeAll || p.Type == typeAllExplicit {
+		query = fmt.Sprintf("SELECT file_key FROM activities WHERE type NOT LIKE \"other\" AND date > \"%s\"", p.AfterDate)
+	} else {
+		query = fmt.Sprintf("SELECT file_key FROM activities WHERE type LIKE \"%s\" AND date > \"%s\"", p.Type, p.AfterDate)
+	}
+
+	rows, sqlerr := p.Database.Query(query)
+
+	if sqlerr != nil {
+		return []string{}, sqlerr
+	}
+
+	entries := []string{}
+
+	for rows.Next() {
+		var fileKey string
+		err := rows.Scan(&fileKey)
+		if err == sql.ErrNoRows {
+			return []string{}, err
+		}
+		if err != nil {
+			return []string{}, err
+		}
+
+		entries = append(entries, fileKey)
+
+	}
+	return entries, nil
+}
+
+func OpenDB(file string, afterDate string, activityType string) (LocalGpxKeyDatabase, error) {
+	db, err := sql.Open("sqlite", file)
+	if err != nil {
+		return LocalGpxKeyDatabase{}, err
+	}
+	return LocalGpxKeyDatabase{Database: db, AfterDate: afterDate, Type: ActivityType(activityType)}, nil
 }

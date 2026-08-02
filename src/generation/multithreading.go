@@ -1,7 +1,6 @@
 package generation
 
 import (
-	"os"
 	"sync"
 )
 
@@ -10,14 +9,14 @@ import (
 
 type SafeStringSet struct {
 	mu     sync.RWMutex
-	values map[string]*os.File
+	values map[string][]byte
 }
 
 func NewSafeStringSet() *SafeStringSet {
-	return &SafeStringSet{values: make(map[string]*os.File)}
+	return &SafeStringSet{values: make(map[string][]byte)}
 }
 
-func (s *SafeStringSet) Add(value string, file *os.File) {
+func (s *SafeStringSet) Add(value string, file []byte) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.values[value] = file
